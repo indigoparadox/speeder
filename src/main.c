@@ -31,6 +31,8 @@ struct SPEEDER_OBJ {
 struct SPEEDER_DATA {
    struct SPEEDER_OBJ objects[SPEEDER_OBJ_SZ_MAX];
    float ray_inc_x;
+   float fov;
+   float fov_half;
    struct SPEEDER_OBJ** depths;
 };
 
@@ -95,6 +97,7 @@ void speeder_loop_iter( struct SPEEDER_DATA* data ) {
    int scan_x = 0;
    float ang = 0;
    struct SPEEDER_OBJ* obj = NULL;
+   struct SPEEDER_OBJ* player = &(data->objects[0]);
 
    /* Input */
 
@@ -107,29 +110,29 @@ void speeder_loop_iter( struct SPEEDER_DATA* data ) {
       break;
 
    case RETROFLAT_KEY_RIGHT:
-      data->objects[0].xf += 0.1;
-      debug_printf( 1, "facing: %f", data->objects[0].xf );
+      player->xf += 0.1;
+      debug_printf( 1, "facing: %f", player->xf );
       break;
 
    case RETROFLAT_KEY_LEFT:
-      data->objects[0].xf -= 0.1;
-      debug_printf( 1, "facing: %f", data->objects[0].xf );
+      player->xf -= 0.1;
+      debug_printf( 1, "facing: %f", player->xf );
       break;
 
    case RETROFLAT_KEY_UP:
-      data->objects[0].v += 0.1;
-      debug_printf( 1, "velocity: %f", data->objects[0].v );
+      player->v += 0.1;
+      debug_printf( 1, "velocity: %f", player->v );
       break;
 
    case RETROFLAT_KEY_DOWN:
-      data->objects[0].v -= 0.1;
-      debug_printf( 1, "velocity: %f", data->objects[0].v );
+      player->v -= 0.1;
+      debug_printf( 1, "velocity: %f", player->v );
       break;
    }
 
    /* Move forward. */
-   data->objects[0].x += (cos( data->objects[0].xf ) * data->objects[0].v);
-   data->objects[0].y += (sin( data->objects[0].xf ) * data->objects[0].v);
+   player->x += (cos( player->xf ) * player->v);
+   player->y += (sin( player->xf ) * player->v);
 
    /* Draw */
 
@@ -140,10 +143,11 @@ void speeder_loop_iter( struct SPEEDER_DATA* data ) {
       retroflat_screen_w(), retroflat_screen_h(), RETROFLAT_FLAGS_FILL );
 
    for( scan_x = 0 ; retroflat_screen_w() > scan_x ; scan_x += 2 ) {
-      ang = data->objects[0].xf + (data->ray_inc_x * scan_x);
+      /* Start scanlines at the far left of the FOV. */
+      ang = player->xf - data->fov_half + (data->ray_inc_x * scan_x);
 
       obj = speeder_cast_ray_x(
-         data, data->objects[0].x, data->objects[0].y,
+         data, player->x, player->y,
          ang, ang + SPEEDER_RAY_ANGLE_INC, 0.1 );
 
       if( NULL != obj ) {
@@ -162,16 +166,17 @@ void speeder_loop_iter( struct SPEEDER_DATA* data ) {
    }
 
    /* Draw the minimap. */
-   retroflat_px(
+   retroflat_line(
       NULL, RETROFLAT_COLOR_WHITE,
       MINIMAP_X + SPEEDER_RAY_DEPTH_MAX,
-      MINIMAP_Y + SPEEDER_RAY_DEPTH_MAX, 0 );
+      MINIMAP_Y + SPEEDER_RAY_DEPTH_MAX,
+      MINIMAP_X + SPEEDER_RAY_DEPTH_MAX + (cos( player->xf ) * 10),
+      MINIMAP_Y + SPEEDER_RAY_DEPTH_MAX + (sin( player->xf ) * 10),
+      0 );
 
    for( scan_x = 0 ; retroflat_screen_w() > scan_x ; scan_x++ ) {
-      ang = data->objects[0].xf -
-         /* Start scanlines in the middle of the FOV. */
-         (retroflat_screen_w() / 2) +
-         (data->ray_inc_x * scan_x);
+      /* Start scanlines at the far left of the FOV. */
+      ang = player->xf - data->fov_half + (data->ray_inc_x * scan_x);
 
       if( NULL == data->depths[scan_x] ) {
          /* Draw a dot at the maximum range. */
@@ -238,6 +243,7 @@ int main( int argc, char** argv ) {
 
    data.ray_inc_x = RETROFLAT_PI / retroflat_screen_w();
    data.depths = calloc( retroflat_screen_w(), sizeof( struct SPEEDER_OBJ* ) );
+   data.fov_half = RETROFLAT_PI / 2; /* TODO: 90 degree FOV. */
    assert( NULL != data.depths );
 
    retroflat_loop( (retroflat_loop_iter)speeder_loop_iter, &data );
