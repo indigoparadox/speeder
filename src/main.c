@@ -72,13 +72,13 @@ struct SPEEDER_OBJ* speeder_cast_ray_x(
 
          /* Object is bottom-left from source. */
          (data->objects[i].x > sx && data->objects[i].y < sy &&
-         data->objects[i].x < x1 && data->objects[i].x > x2 &&
-         data->objects[i].y < y1 && data->objects[i].y > y2) ||
+         data->objects[i].x <= x2 && data->objects[i].x > x1 &&
+         data->objects[i].y <= y2 && data->objects[i].y > y1) ||
 
          /* Object is top-right from source. */
          (data->objects[i].x < sx && data->objects[i].y > sy &&
-         data->objects[i].x > x1 && data->objects[i].x < x2 &&
-         data->objects[i].y > y1 && data->objects[i].y < y2)
+         data->objects[i].x >= x2 && data->objects[i].x < x1 &&
+         data->objects[i].y >= y2 && data->objects[i].y < y1)
       ) {
          data->objects[i].pov_dist = depth;
          return &(data->objects[i]);
