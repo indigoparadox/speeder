@@ -25,11 +25,13 @@ struct SPEEDER_OBJ {
    float z;
    float v;
    float pov_dist;
+   RETROFLAT_COLOR color;
 };
 
 struct SPEEDER_DATA {
    struct SPEEDER_OBJ objects[SPEEDER_OBJ_SZ_MAX];
    float ray_inc_x;
+   struct SPEEDER_OBJ** depths;
 };
 
 struct SPEEDER_OBJ* speeder_cast_ray_x(
@@ -43,10 +45,10 @@ struct SPEEDER_OBJ* speeder_cast_ray_x(
    int i = 0;
 
    /* Get coordinates for this iteration of seeking rays. */
-   x1 = cos( ang1 ) * depth;
-   y1 = sin( ang1 ) * depth;
-   x2 = cos( ang2 ) * depth;
-   y2 = sin( ang2 ) * depth;
+   x1 = sx + (cos( ang1 ) * depth);
+   y1 = sy + (sin( ang1 ) * depth);
+   x2 = sx + (cos( ang2 ) * depth);
+   y2 = sy + (sin( ang2 ) * depth);
 
    if( depth > SPEEDER_RAY_DEPTH_MAX ) {
       debug_printf( 0, "ray maxxed at %f, %f/%f, %f", x1, y1, x2, y2 );
@@ -58,11 +60,25 @@ struct SPEEDER_OBJ* speeder_cast_ray_x(
          continue;
       }
       if(
-         /* Object is top-right from source. */
-         data->objects[i].x > sx && data->objects[i].y > sy &&
+         /* Object is top-left from source. */
+         (data->objects[i].x > sx && data->objects[i].y > sy &&
+         data->objects[i].x < x1 && data->objects[i].x > x2 &&
+         data->objects[i].y > y1 && data->objects[i].y < y2) ||
 
-         data->objects[i].x < x1 && data->objects[i].x >= x2 &&
-         data->objects[i].y >= y1 && data->objects[i].y < y2 
+         /* Object is bottom-right from source. */
+         (data->objects[i].x < sx && data->objects[i].y < sy &&
+         data->objects[i].x > x1 && data->objects[i].x < x2 &&
+         data->objects[i].y < y1 && data->objects[i].y > y2) ||
+
+         /* Object is bottom-left from source. */
+         (data->objects[i].x > sx && data->objects[i].y < sy &&
+         data->objects[i].x < x1 && data->objects[i].x > x2 &&
+         data->objects[i].y < y1 && data->objects[i].y > y2) ||
+
+         /* Object is top-right from source. */
+         (data->objects[i].x < sx && data->objects[i].y > sy &&
+         data->objects[i].x > x1 && data->objects[i].x < x2 &&
+         data->objects[i].y > y1 && data->objects[i].y < y2)
       ) {
          data->objects[i].pov_dist = depth;
          return &(data->objects[i]);
@@ -79,7 +95,6 @@ void speeder_loop_iter( struct SPEEDER_DATA* data ) {
    int scan_x = 0;
    float ang = 0;
    struct SPEEDER_OBJ* obj = NULL;
-   float depths[800];
 
    /* Input */
 
@@ -100,8 +115,21 @@ void speeder_loop_iter( struct SPEEDER_DATA* data ) {
       data->objects[0].xf -= 0.1;
       debug_printf( 1, "facing: %f", data->objects[0].xf );
       break;
+
+   case RETROFLAT_KEY_UP:
+      data->objects[0].v += 0.1;
+      debug_printf( 1, "velocity: %f", data->objects[0].v );
+      break;
+
+   case RETROFLAT_KEY_DOWN:
+      data->objects[0].v -= 0.1;
+      debug_printf( 1, "velocity: %f", data->objects[0].v );
+      break;
    }
 
+   /* Move forward. */
+   data->objects[0].x += (cos( data->objects[0].xf ) * data->objects[0].v);
+   data->objects[0].y += (sin( data->objects[0].xf ) * data->objects[0].v);
 
    /* Draw */
 
@@ -119,14 +147,14 @@ void speeder_loop_iter( struct SPEEDER_DATA* data ) {
          ang, ang + SPEEDER_RAY_ANGLE_INC, 0.1 );
 
       if( NULL != obj ) {
-         depths[scan_x] = obj->pov_dist;
+         data->depths[scan_x] = obj;
       } else {
-         depths[scan_x] = 0;
+         data->depths[scan_x] = NULL;
       }
 
       if( NULL != obj ) {
          debug_printf( 0, "obj %f away", obj->pov_dist );
-         retroflat_rect( NULL, RETROFLAT_COLOR_WHITE,
+         retroflat_rect( NULL, obj->color,
             scan_x, 
             (retroflat_screen_h() / 2),
             3, 3, RETROFLAT_FLAGS_FILL );
@@ -134,13 +162,21 @@ void speeder_loop_iter( struct SPEEDER_DATA* data ) {
    }
 
    /* Draw the minimap. */
-   for( scan_x = 0 ; retroflat_screen_w() > scan_x ; scan_x++ ) {
-      ang = data->objects[0].xf + (data->ray_inc_x * scan_x);
+   retroflat_px(
+      NULL, RETROFLAT_COLOR_WHITE,
+      MINIMAP_X + SPEEDER_RAY_DEPTH_MAX,
+      MINIMAP_Y + SPEEDER_RAY_DEPTH_MAX, 0 );
 
-      if( 0 == depths[scan_x] ) {
+   for( scan_x = 0 ; retroflat_screen_w() > scan_x ; scan_x++ ) {
+      ang = data->objects[0].xf -
+         /* Start scanlines in the middle of the FOV. */
+         (retroflat_screen_w() / 2) +
+         (data->ray_inc_x * scan_x);
+
+      if( NULL == data->depths[scan_x] ) {
          /* Draw a dot at the maximum range. */
          retroflat_px(
-            NULL, RETROFLAT_COLOR_BLUE,
+            NULL, RETROFLAT_COLOR_DARKGRAY,
             MINIMAP_X + SPEEDER_RAY_DEPTH_MAX +
                (cos( ang ) * SPEEDER_RAY_DEPTH_MAX),
             MINIMAP_Y + SPEEDER_RAY_DEPTH_MAX +
@@ -148,11 +184,11 @@ void speeder_loop_iter( struct SPEEDER_DATA* data ) {
       } else {
          /* Draw a dot at the found depth. */
          retroflat_px(
-            NULL, RETROFLAT_COLOR_RED,
+            NULL, data->depths[scan_x]->color,
             MINIMAP_X + SPEEDER_RAY_DEPTH_MAX +
-               (cos( ang ) * depths[scan_x]),
+               (cos( ang ) * data->depths[scan_x]->pov_dist),
             MINIMAP_Y + SPEEDER_RAY_DEPTH_MAX +
-               (sin( ang ) * depths[scan_x]), 0 );
+               (sin( ang ) * data->depths[scan_x]->pov_dist), 0 );
       }
    }
 
@@ -166,8 +202,8 @@ int main( int argc, char** argv ) {
 
    /* === Setup === */
 
-   args.screen_w = 800;
-   args.screen_h = 600;
+   args.screen_w = 320;
+   args.screen_h = 240;
    args.title = "speeder";
    args.assets_path = "";
 
@@ -183,11 +219,38 @@ int main( int argc, char** argv ) {
    data.objects[1].x = 10;
    data.objects[1].y = 4;
    data.objects[1].active = 1;
+   data.objects[1].color = RETROFLAT_COLOR_RED;
+
+   data.objects[2].x = -8;
+   data.objects[2].y = -10;
+   data.objects[2].active = 1;
+   data.objects[2].color = RETROFLAT_COLOR_GREEN;
+
+   data.objects[3].x = 5;
+   data.objects[3].y = -4;
+   data.objects[3].active = 1;
+   data.objects[3].color = RETROFLAT_COLOR_BLUE;
+
+   data.objects[4].x = -3;
+   data.objects[4].y = 3;
+   data.objects[4].active = 1;
+   data.objects[4].color = RETROFLAT_COLOR_VIOLET;
+
    data.ray_inc_x = RETROFLAT_PI / retroflat_screen_w();
+   data.depths = calloc( retroflat_screen_w(), sizeof( struct SPEEDER_OBJ* ) );
+   assert( NULL != data.depths );
 
    retroflat_loop( (retroflat_loop_iter)speeder_loop_iter, &data );
 
 cleanup:
+
+#ifndef RETROFLAT_OS_WASM
+
+   if( NULL != data.depths ) {
+      free( data.depths );
+   }
+
+#endif /* !RETROFLAT_OS_WASM */
 
    retroflat_shutdown( retval );
 
