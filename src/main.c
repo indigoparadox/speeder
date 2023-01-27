@@ -31,26 +31,49 @@ struct SPEEDER_OBJ {
 struct SPEEDER_DATA {
    struct SPEEDER_OBJ objects[SPEEDER_OBJ_SZ_MAX];
    float ray_inc_x;
+   float ray_inc_z;
    float fov;
    float fov_half;
    struct SPEEDER_OBJ** depths;
 };
 
-struct SPEEDER_OBJ* speeder_cast_ray_x(
-   struct SPEEDER_DATA* data,
-   float sx, float sy, float ang1, float ang2, float depth
+struct SPEEDER_OBJ* speeder_cast_ray_z(
+   struct SPEEDER_OBJ* seeker, struct SPEEDER_OBJ* obj,
+   float z_ang1, float z_ang2, float depth
+) {
+   float z1 = 0,
+      z2 = 0;
+
+   if( depth > SPEEDER_RAY_DEPTH_MAX ) {
+      return NULL;
+   }
+
+   if(
+      /* Object is above source. */
+      (obj->z > seeker->z && obj->z < z1 && obj->z > z2) ||
+
+      /* Object is below from source. */
+      (obj->z < seeker->z && obj->z > z1 && obj->z < z2)
+   ) {
+   }
+}
+
+struct SPEEDER_OBJ* speeder_cast_ray(
+   struct SPEEDER_DATA* data, struct SPEEDER_OBJ* seeker,
+   float ang1, float ang2, float depth
 ) {
    float x1 = 0,
       y1 = 0,
       x2 = 0,
       y2 = 0;
-   int i = 0;
+   int i = 0,
+      scan_z = 0;
 
    /* Get coordinates for this iteration of seeking rays. */
-   x1 = sx + (cos( ang1 ) * depth);
-   y1 = sy + (sin( ang1 ) * depth);
-   x2 = sx + (cos( ang2 ) * depth);
-   y2 = sy + (sin( ang2 ) * depth);
+   x1 = seeker->x + (cos( ang1 ) * depth);
+   y1 = seeker->y + (sin( ang1 ) * depth);
+   x2 = seeker->x + (cos( ang2 ) * depth);
+   y2 = seeker->y + (sin( ang2 ) * depth);
 
    if( depth > SPEEDER_RAY_DEPTH_MAX ) {
       debug_printf( 0, "ray maxxed at %f, %f/%f, %f", x1, y1, x2, y2 );
@@ -63,32 +86,40 @@ struct SPEEDER_OBJ* speeder_cast_ray_x(
       }
       if(
          /* Object is top-left from source. */
-         (data->objects[i].x > sx && data->objects[i].y > sy &&
+         (data->objects[i].x > seeker->x && data->objects[i].y > seeker->y &&
          data->objects[i].x < x1 && data->objects[i].x > x2 &&
          data->objects[i].y > y1 && data->objects[i].y < y2) ||
 
          /* Object is bottom-right from source. */
-         (data->objects[i].x < sx && data->objects[i].y < sy &&
+         (data->objects[i].x < seeker->x && data->objects[i].y < seeker->y &&
          data->objects[i].x > x1 && data->objects[i].x < x2 &&
          data->objects[i].y < y1 && data->objects[i].y > y2) ||
 
          /* Object is bottom-left from source. */
-         (data->objects[i].x > sx && data->objects[i].y < sy &&
+         (data->objects[i].x > seeker->x && data->objects[i].y < seeker->y &&
          data->objects[i].x <= x2 && data->objects[i].x > x1 &&
          data->objects[i].y <= y2 && data->objects[i].y > y1) ||
 
          /* Object is top-right from source. */
-         (data->objects[i].x < sx && data->objects[i].y > sy &&
+         (data->objects[i].x < seeker->x && data->objects[i].y > seeker->y &&
          data->objects[i].x >= x2 && data->objects[i].x < x1 &&
          data->objects[i].y >= y2 && data->objects[i].y < y1)
       ) {
-         data->objects[i].pov_dist = depth;
+
+         /* Found the X/Y, hunt down the Z. */
+         #if 0
+         for( scan_z = 0 ; retroflat_screen_h() > scan_z ; scan_z += 2 ) {
+            z_ang1 = seeker->zf - data->fov_half + (data->ray_inc_z * scan_z);
+            z_ang2 = z_ang1 + data->ray_inc_z;
+#endif
+               data->objects[i].pov_dist = depth;
+
          return &(data->objects[i]);
       }
    }
 
-   return speeder_cast_ray_x(
-      data, sx, sy, ang1, ang2, depth + SPEEDER_RAY_DEPTH_INC );
+   return speeder_cast_ray(
+      data, seeker, ang1, ang2, depth + SPEEDER_RAY_DEPTH_INC );
 }
 
 void speeder_loop_iter( struct SPEEDER_DATA* data ) {
@@ -146,8 +177,8 @@ void speeder_loop_iter( struct SPEEDER_DATA* data ) {
       /* Start scanlines at the far left of the FOV. */
       ang = player->xf - data->fov_half + (data->ray_inc_x * scan_x);
 
-      obj = speeder_cast_ray_x(
-         data, player->x, player->y,
+      obj = speeder_cast_ray(
+         data, player,
          ang, ang + SPEEDER_RAY_ANGLE_INC, 0.1 );
 
       if( NULL != obj ) {
@@ -174,7 +205,7 @@ void speeder_loop_iter( struct SPEEDER_DATA* data ) {
       MINIMAP_Y + SPEEDER_RAY_DEPTH_MAX + (sin( player->xf ) * 10),
       0 );
 
-   for( scan_x = 0 ; retroflat_screen_w() > scan_x ; scan_x++ ) {
+   for( scan_x = 0 ; retroflat_screen_w() > scan_x ; scan_x += 2 ) {
       /* Start scanlines at the far left of the FOV. */
       ang = player->xf - data->fov_half + (data->ray_inc_x * scan_x);
 
@@ -239,11 +270,13 @@ int main( int argc, char** argv ) {
    data.objects[4].x = -3;
    data.objects[4].y = 3;
    data.objects[4].active = 1;
-   data.objects[4].color = RETROFLAT_COLOR_VIOLET;
+   data.objects[4].color = RETROFLAT_COLOR_CYAN;
 
-   data.ray_inc_x = RETROFLAT_PI / retroflat_screen_w();
+   /* Full circle is 2pi, so pi=180 degrees, so pi/2=90 degree FOV. */
+   data.ray_inc_x = (RETROFLAT_PI / 2) / retroflat_screen_w();
+   data.ray_inc_z = (RETROFLAT_PI / 2) / retroflat_screen_h();
    data.depths = calloc( retroflat_screen_w(), sizeof( struct SPEEDER_OBJ* ) );
-   data.fov_half = RETROFLAT_PI / 2; /* TODO: 90 degree FOV. */
+   data.fov_half = RETROFLAT_PI / 4;
    assert( NULL != data.depths );
 
    retroflat_loop( (retroflat_loop_iter)speeder_loop_iter, &data );
