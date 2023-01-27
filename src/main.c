@@ -25,6 +25,7 @@ struct SPEEDER_OBJ {
    float z;
    float v;
    float pov_dist;
+   int z_scan;
    RETROFLAT_COLOR color;
 };
 
@@ -48,14 +49,23 @@ struct SPEEDER_OBJ* speeder_cast_ray_z(
       return NULL;
    }
 
+   z1 = seeker->z + (cos( z_ang1 ) * depth);
+   z2 = seeker->z + (cos( z_ang2 ) * depth);
+
    if(
+      (obj->z == seeker->z) ||
+
       /* Object is above source. */
       (obj->z > seeker->z && obj->z < z1 && obj->z > z2) ||
 
       /* Object is below from source. */
       (obj->z < seeker->z && obj->z > z1 && obj->z < z2)
    ) {
+      return obj;
    }
+
+   return speeder_cast_ray_z( seeker, obj, z_ang1, z_ang2,
+      depth + SPEEDER_RAY_DEPTH_INC );
 }
 
 struct SPEEDER_OBJ* speeder_cast_ray(
@@ -65,7 +75,8 @@ struct SPEEDER_OBJ* speeder_cast_ray(
    float x1 = 0,
       y1 = 0,
       x2 = 0,
-      y2 = 0;
+      y2 = 0,
+      z_ang = 0;
    int i = 0,
       scan_z = 0;
 
@@ -107,14 +118,21 @@ struct SPEEDER_OBJ* speeder_cast_ray(
       ) {
 
          /* Found the X/Y, hunt down the Z. */
-         #if 0
          for( scan_z = 0 ; retroflat_screen_h() > scan_z ; scan_z += 2 ) {
-            z_ang1 = seeker->zf - data->fov_half + (data->ray_inc_z * scan_z);
-            z_ang2 = z_ang1 + data->ray_inc_z;
-#endif
-               data->objects[i].pov_dist = depth;
+            z_ang = seeker->zf - data->fov_half + (data->ray_inc_z * scan_z);
 
-         return &(data->objects[i]);
+            if( NULL != speeder_cast_ray_z(
+               seeker, &(data->objects[i]),
+               z_ang, z_ang + data->ray_inc_z,
+               SPEEDER_RAY_DEPTH_INC
+            ) ) {
+               data->objects[i].z_scan = scan_z;
+               data->objects[i].pov_dist = depth;
+               
+               /* Found this object on the Z plane. */
+               return &(data->objects[i]);
+            }
+         }
       }
    }
 
@@ -142,22 +160,22 @@ void speeder_loop_iter( struct SPEEDER_DATA* data ) {
 
    case RETROFLAT_KEY_RIGHT:
       player->xf += 0.1;
-      debug_printf( 1, "facing: %f", player->xf );
+      debug_printf( 0, "facing: %f", player->xf );
       break;
 
    case RETROFLAT_KEY_LEFT:
       player->xf -= 0.1;
-      debug_printf( 1, "facing: %f", player->xf );
+      debug_printf( 0, "facing: %f", player->xf );
       break;
 
    case RETROFLAT_KEY_UP:
       player->v += 0.1;
-      debug_printf( 1, "velocity: %f", player->v );
+      debug_printf( 0, "velocity: %f", player->v );
       break;
 
    case RETROFLAT_KEY_DOWN:
       player->v -= 0.1;
-      debug_printf( 1, "velocity: %f", player->v );
+      debug_printf( 0, "velocity: %f", player->v );
       break;
    }
 
@@ -191,7 +209,7 @@ void speeder_loop_iter( struct SPEEDER_DATA* data ) {
          debug_printf( 0, "obj %f away", obj->pov_dist );
          retroflat_rect( NULL, obj->color,
             scan_x, 
-            (retroflat_screen_h() / 2),
+            obj->z_scan,
             3, 3, RETROFLAT_FLAGS_FILL );
       }
    }
@@ -254,6 +272,7 @@ int main( int argc, char** argv ) {
 
    data.objects[1].x = 10;
    data.objects[1].y = 4;
+   data.objects[1].z = 2;
    data.objects[1].active = 1;
    data.objects[1].color = RETROFLAT_COLOR_RED;
 
@@ -264,6 +283,7 @@ int main( int argc, char** argv ) {
 
    data.objects[3].x = 5;
    data.objects[3].y = -4;
+   data.objects[3].z = -3;
    data.objects[3].active = 1;
    data.objects[3].color = RETROFLAT_COLOR_BLUE;
 
