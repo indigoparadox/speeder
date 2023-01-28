@@ -52,14 +52,20 @@ struct SPEEDER_OBJ* speeder_cast_ray_z(
    z1 = seeker->z + (cos( z_ang1 ) * depth);
    z2 = seeker->z + (cos( z_ang2 ) * depth);
 
-   if(
-      (obj->z == seeker->z) ||
+   if( z_ang1 < 0 ) {
+      z1 *= -1;
+   }
 
+   if( z_ang2 < 0 ) {
+      z2 *= -1;
+   }
+
+   if(
       /* Object is above source. */
       (obj->z > seeker->z && obj->z < z1 && obj->z > z2) ||
 
       /* Object is below from source. */
-      (obj->z < seeker->z && obj->z > z1 && obj->z < z2)
+      (obj->z < seeker->z && obj->z < z1 && obj->z > z2)
    ) {
       return obj;
    }
@@ -85,7 +91,7 @@ struct SPEEDER_OBJ* speeder_cast_ray(
    y1 = seeker->y + (sin( ang1 ) * depth);
    x2 = seeker->x + (cos( ang2 ) * depth);
    y2 = seeker->y + (sin( ang2 ) * depth);
-
+   
    if( depth > SPEEDER_RAY_DEPTH_MAX ) {
       debug_printf( 0, "ray maxxed at %f, %f/%f, %f", x1, y1, x2, y2 );
       return NULL;
@@ -116,6 +122,12 @@ struct SPEEDER_OBJ* speeder_cast_ray(
          data->objects[i].x >= x2 && data->objects[i].x < x1 &&
          data->objects[i].y >= y2 && data->objects[i].y < y1)
       ) {
+
+         if( data->objects[i].z == seeker->z ) {
+            data->objects[i].z_scan = retroflat_screen_h() / 2;
+            data->objects[i].pov_dist = depth;
+            return &(data->objects[i]);
+         }
 
          /* Found the X/Y, hunt down the Z. */
          for( scan_z = 0 ; retroflat_screen_h() > scan_z ; scan_z += 2 ) {
@@ -272,7 +284,7 @@ int main( int argc, char** argv ) {
 
    data.objects[1].x = 10;
    data.objects[1].y = 4;
-   data.objects[1].z = 2;
+   data.objects[1].z = 4;
    data.objects[1].active = 1;
    data.objects[1].color = RETROFLAT_COLOR_RED;
 
@@ -295,6 +307,8 @@ int main( int argc, char** argv ) {
    /* Full circle is 2pi, so pi=180 degrees, so pi/2=90 degree FOV. */
    data.ray_inc_x = (RETROFLAT_PI / 2) / retroflat_screen_w();
    data.ray_inc_z = (RETROFLAT_PI / 2) / retroflat_screen_h();
+   data.objects[0].zf = 0;
+   /* data.objects[0].zf = -1 * (RETROFLAT_PI / 4); */ /* Face forward. */
    data.depths = calloc( retroflat_screen_w(), sizeof( struct SPEEDER_OBJ* ) );
    data.fov_half = RETROFLAT_PI / 4;
    assert( NULL != data.depths );
