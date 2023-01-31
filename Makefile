@@ -5,6 +5,8 @@ C_FILES := src/main.c
 
 include maug/Makefile.inc
 
+LDFLAGS_GCC += -lm
+
 # Target-specific options.
 .PHONY: clean
 

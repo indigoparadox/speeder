@@ -34,7 +34,6 @@ struct SPEEDER_DATA {
    float ray_inc_x;
    float ray_inc_z;
    float fov;
-   float fov_half;
    struct SPEEDER_OBJ** depths;
 };
 
@@ -131,7 +130,8 @@ struct SPEEDER_OBJ* speeder_cast_ray(
 
          /* Found the X/Y, hunt down the Z. */
          for( scan_z = 0 ; retroflat_screen_h() > scan_z ; scan_z += 2 ) {
-            z_ang = seeker->zf - data->fov_half + (data->ray_inc_z * scan_z);
+            z_ang = seeker->zf +
+               ((scan_z - (retroflat_screen_h() / 2)) * data->ray_inc_z);
 
             if( NULL != speeder_cast_ray_z(
                seeker, &(data->objects[i]),
@@ -205,7 +205,8 @@ void speeder_loop_iter( struct SPEEDER_DATA* data ) {
 
    for( scan_x = 0 ; retroflat_screen_w() > scan_x ; scan_x += 2 ) {
       /* Start scanlines at the far left of the FOV. */
-      ang = player->xf - data->fov_half + (data->ray_inc_x * scan_x);
+      ang = player->xf + 
+         ((scan_x - (retroflat_screen_w() / 2)) * data->ray_inc_x);
 
       obj = speeder_cast_ray(
          data, player,
@@ -237,7 +238,8 @@ void speeder_loop_iter( struct SPEEDER_DATA* data ) {
 
    for( scan_x = 0 ; retroflat_screen_w() > scan_x ; scan_x += 2 ) {
       /* Start scanlines at the far left of the FOV. */
-      ang = player->xf - data->fov_half + (data->ray_inc_x * scan_x);
+      ang = player->xf + 
+         ((scan_x - (retroflat_screen_w() / 2)) * data->ray_inc_x);
 
       if( NULL == data->depths[scan_x] ) {
          /* Draw a dot at the maximum range. */
@@ -310,7 +312,6 @@ int main( int argc, char** argv ) {
    data.objects[0].zf = 0;
    /* data.objects[0].zf = -1 * (RETROFLAT_PI / 4); */ /* Face forward. */
    data.depths = calloc( retroflat_screen_w(), sizeof( struct SPEEDER_OBJ* ) );
-   data.fov_half = RETROFLAT_PI / 4;
    assert( NULL != data.depths );
 
    retroflat_loop( (retroflat_loop_iter)speeder_loop_iter, &data );
