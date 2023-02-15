@@ -1,5 +1,6 @@
 
 #include <stdlib.h>
+#include <math.h>
 
 #define MAUG_C
 #include <maug.h>
@@ -162,7 +163,6 @@ void speeder_loop_iter( struct SPEEDER_DATA* data ) {
 
    /* Input */
 
-   input_evt.allow_repeat = 1;
    input = retroflat_poll_input( &input_evt );
 
    switch( input ) {
@@ -274,6 +274,7 @@ int main( int argc, char** argv ) {
    args.screen_h = 240;
    args.title = "speeder";
    args.assets_path = "";
+   args.flags = RETROFLAT_FLAGS_KEY_REPEAT;
 
    retval = retroflat_init( argc, argv, &args );
    if( RETROFLAT_OK != retval ) {
