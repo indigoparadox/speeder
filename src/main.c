@@ -315,7 +315,7 @@ int main( int argc, char** argv ) {
    data.depths = calloc( retroflat_screen_w(), sizeof( struct SPEEDER_OBJ* ) );
    assert( NULL != data.depths );
 
-   retroflat_loop( (retroflat_loop_iter)speeder_loop_iter, &data );
+   retroflat_loop( (retroflat_loop_iter)speeder_loop_iter, NULL, &data );
 
 cleanup:
 
