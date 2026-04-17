@@ -270,6 +270,8 @@ int main( int argc, char** argv ) {
 
    /* === Setup === */
 
+   maug_mzero( &args, sizeof( struct RETROFLAT_ARGS ) );
+
    args.screen_w = 320;
    args.screen_h = 240;
    args.title = "speeder";

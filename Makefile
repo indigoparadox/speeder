@@ -10,7 +10,7 @@ include maug/Makefile.inc
 # Target-specific options.
 .PHONY: clean
 
-all: speed.ale speed.sdl speedd.exe speedw.exe speednt.exe speed.html
+all: speed.$(MAUG_UNIX).ale speed.$(MAUG_UNIX).sdl speedd.exe speedw.exe speednt.exe speed.html
 
 # Unix (Allegro)
 
@@ -27,6 +27,10 @@ $(eval $(call TGTWASMSDL,speed))
 # DOS
 
 $(eval $(call TGTDOSALE,speed))
+
+# Win
+
+$(eval $(call TGTWIN16,speed))
 
 # WinNT
 
